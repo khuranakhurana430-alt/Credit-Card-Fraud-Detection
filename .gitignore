@@ -1,0 +1,6 @@
+creditcard.csv
+.project3/
+__pycache__/
+*.ipynb_checkpoints
+.DS_Store
+*.csv
