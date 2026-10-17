@@ -7,10 +7,19 @@ import plotly.graph_objects as go
 
 # 1. PAGE CONFIG
 st.set_page_config(
-    page_title="Fraud Detection System", 
+    page_title="FraudGuard AI", 
     page_icon="🛡️", 
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS for better styling
+st.markdown("""
+    <style>
+    .big-font { font-size:20px !important; }
+    .metric-card { background-color: #1E1E1E; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+    </style>
+""", unsafe_allow_html=True)
 
 # Load artifacts
 @st.cache_resource
@@ -22,129 +31,156 @@ def load_artifacts():
 
 model, scaler, threshold = load_artifacts()
 
-# 2. SIDEBAR WITH LOGO
-# Using a professional security shield icon
+# 2. SIDEBAR
 logo_url = "https://cdn-icons-png.flaticon.com/512/2886/2886670.png"
 st.sidebar.image(logo_url, width=100)
-st.sidebar.title("Fraud Analytics")
+st.sidebar.title("FraudGuard AI")
 st.sidebar.markdown("---")
+
 st.sidebar.info(
-    "This system uses an XGBoost model trained on PCA-transformed credit card data. "
-    "It is designed to detect fraudulent transactions in real-time to protect customers."
+    "**How to use this app:**\n\n"
+    "1. Go to the **Fraud Simulator** tab.\n"
+    "2. Use the preset buttons at the top to load a test transaction.\n"
+    "3. Or, manually adjust the **V1-V5 sliders** (the most impactful features).\n"
+    "4. Click **Analyze Transaction** to see the prediction."
 )
+
 st.sidebar.markdown("---")
-st.sidebar.write(f"**Model Accuracy:** 99.95%")
-st.sidebar.write(f"**Fraud Precision:** 91.8%")
+st.sidebar.subheader("Model Information")
+st.sidebar.write(f"**Accuracy:** 99.95%")
+st.sidebar.write(f"**Precision:** 91.8%")
 st.sidebar.write(f"**Decision Threshold:** {threshold:.2f}")
 
-# MAIN PAGE HEADER
-st.title("🛡️ Credit Card Fraud Detection")
-st.markdown("Enter transaction details below to evaluate the risk of fraud. *(Note: V1-V28 are anonymized PCA components).*")
+st.sidebar.markdown("---")
+st.sidebar.markdown("[🔗 View Source Code on GitHub](https://github.com/khuranakhurana430-alt/Credit-Card-Fraud-Detection)")
 
-# Use a form to group inputs
-with st.form("fraud_form"):
-    st.subheader("Transaction Details")
+# 3. MAIN PAGE HEADER
+st.title("🛡️ FraudGuard AI")
+st.markdown("An advanced Machine Learning system designed to detect fraudulent credit card transactions in real-time using XGBoost.")
+
+# Create Tabs
+tab1, tab2 = st.tabs(["💳 Fraud Simulator", "📊 Model Insights"])
+
+# --- TAB 1: SIMULATOR ---
+with tab1:
+    st.subheader("Transaction Simulator")
     
-    col1, col2, col3 = st.columns(3)
+    # Session state to handle presets
+    if 'v1' not in st.session_state: st.session_state.v1 = 0.0
+    if 'v2' not in st.session_state: st.session_state.v2 = 0.0
+    if 'v3' not in st.session_state: st.session_state.v3 = 0.0
+    if 'v4' not in st.session_state: st.session_state.v4 = 0.0
+    if 'v5' not in st.session_state: st.session_state.v5 = 0.0
+    if 'amount' not in st.session_state: st.session_state.amount = 100.0
+
+    # Preset Buttons
+    st.write("**Quick Test Scenarios:**")
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
     
-    with col1:
-        amount = st.number_input("Transaction Amount ($)", min_value=0.0, max_value=25000.0, value=100.0, step=10.0)
-    with col2:
-        time = st.number_input("Time (Seconds since first transaction)", min_value=0.0, max_value=172800.0, value=50000.0, step=1000.0)
-    with col3:
-        # A few of the most important PCA features to give the user something to interact with
-        st.markdown("*(V1-V4 are the most impactful PCA features)*")
-        v1 = st.slider("V1", -5.0, 5.0, 0.0)
-        v2 = st.slider("V2", -5.0, 5.0, 0.0)
-        
+    with col_btn1:
+        if st.button("🟢 Load Legitimate Transaction"):
+            st.session_state.v1, st.session_state.v2, st.session_state.v3 = 0.0, 0.0, 0.0
+            st.session_state.v4, st.session_state.v5 = 0.0, 0.0
+            st.session_state.amount = 45.00
+            st.rerun()
+            
+    with col_btn2:
+        if st.button("🚨 Load Suspicious Transaction"):
+            st.session_state.v1, st.session_state.v2, st.session_state.v3 = -4.5, 1.2, -5.1
+            st.session_state.v4, st.session_state.v5 = 3.4, -2.5
+            st.session_state.amount = 1500.00
+            st.rerun()
+
     st.markdown("---")
-    st.markdown("**Advanced PCA Features (Defaults to 0)**")
-    col4, col5, col6 = st.columns(3)
-    with col4:
-        v3 = st.slider("V3", -5.0, 5.0, 0.0)
-    with col5:
-        v4 = st.slider("V4", -5.0, 5.0, 0.0)
-    with col6:
-        v5 = st.slider("V5", -5.0, 5.0, 0.0)
 
-    # Submit button
-    submit_button = st.form_submit_button("🔍 Analyze Transaction", type="primary", use_container_width=True)
-
-if submit_button:
-    # 1. Prepare the 30 features
-    # The model expects: scaled_amount, scaled_time, V1, V2, ..., V28
-    input_data = {
-        'scaled_amount': amount,
-        'scaled_time': time,
-    }
-    # Populate V1 to V28 (using the sliders for 1-5, and 0 for the rest)
-    input_data['V1'] = v1
-    input_data['V2'] = v2
-    input_data['V3'] = v3
-    input_data['V4'] = v4
-    input_data['V5'] = v5
-    for i in range(6, 29):
-        input_data[f'V{i}'] = 0.0
-
-    input_df = pd.DataFrame([input_data])
-
-    # 2. Scale Amount and Time (using the saved scaler)
-    input_df['scaled_amount'] = scaler.transform(input_df['scaled_amount'].values.reshape(-1, 1))
-    input_df['scaled_time'] = scaler.transform(input_df['scaled_time'].values.reshape(-1, 1))
-
-    # 3. Predict
-    proba = model.predict_proba(input_df)[0, 1]
-    prediction = "FRAUD DETECTED" if proba >= threshold else "LEGITIMATE"
-
-    st.divider()
-    
-    # --- RESULTS LAYOUT ---
-    res_col1, res_col2 = st.columns([1, 1])
-
-    with res_col1:
-        st.subheader("Transaction Result")
-        if proba >= threshold:
-            st.error(f"### 🚨 {prediction}")
-            st.write("This transaction exhibits patterns consistent with **fraud**. It should be blocked or flagged for manual review.")
-        else:
-            st.success(f"### ✅ {prediction}")
-            st.write("This transaction appears to be **legitimate**. No immediate action required.")
+    # Input Form
+    with st.form("fraud_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            amount = st.number_input("Transaction Amount ($)", min_value=0.0, max_value=25000.0, value=st.session_state.amount, step=10.0)
+        with col2:
+            time = st.number_input("Time (Seconds)", min_value=0.0, max_value=172800.0, value=50000.0, step=1000.0)
+            
+        st.markdown("**Top PCA Features (V1-V5)**")
+        st.caption("Adjust these sliders to change the transaction profile. Extreme values trigger fraud alerts.")
         
-        # Plotly Gauge Chart
-        fig_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = proba * 100,
-            number = {'suffix': "%"},
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Fraud Probability", 'font': {'size': 24}},
-            gauge = {
-                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': "rgba(0,0,0,0)"},
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
-                'steps': [
-                    {'range': [0, threshold * 100], 'color': "lightgreen"},
-                    {'range': [threshold * 100, 100], 'color': "salmon"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': proba * 100
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1: v1 = st.slider("V1", -10.0, 10.0, st.session_state.v1)
+        with c2: v2 = st.slider("V2", -10.0, 10.0, st.session_state.v2)
+        with c3: v3 = st.slider("V3", -10.0, 10.0, st.session_state.v3)
+        with c4: v4 = st.slider("V4", -10.0, 10.0, st.session_state.v4)
+        with c5: v5 = st.slider("V5", -10.0, 10.0, st.session_state.v5)
+
+        submit_button = st.form_submit_button("🔍 Analyze Transaction", type="primary", use_container_width=True)
+
+    if submit_button:
+        # Prepare Data
+        input_data = {'scaled_amount': amount, 'scaled_time': time}
+        input_data.update({f'V{i}': 0.0 for i in range(6, 29)}) # Fill V6-V28 with 0
+        input_data.update({'V1': v1, 'V2': v2, 'V3': v3, 'V4': v4, 'V5': v5})
+        
+        input_df = pd.DataFrame([input_data])
+        
+        # Scale
+        input_df['scaled_amount'] = scaler.transform(input_df['scaled_amount'].values.reshape(-1, 1))
+        input_df['scaled_time'] = scaler.transform(input_df['scaled_time'].values.reshape(-1, 1))
+
+        # Predict
+        proba = model.predict_proba(input_df)[0, 1]
+        prediction = "FRAUD DETECTED" if proba >= threshold else "LEGITIMATE"
+
+        st.divider()
+        res_col1, res_col2 = st.columns([1, 1])
+
+        with res_col1:
+            st.subheader("Analysis Result")
+            if proba >= threshold:
+                st.error(f"### 🚨 {prediction}")
+                st.write("This transaction exhibits patterns consistent with **fraud**. It should be blocked or flagged for manual review.")
+            else:
+                st.success(f"### ✅ {prediction}")
+                st.write("This transaction appears to be **legitimate**. No immediate action required.")
+            
+            # Gauge Chart
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = proba * 100,
+                number = {'suffix': "%"},
+                title = {'text': "Fraud Probability", 'font': {'size': 24}},
+                gauge = {
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "rgba(0,0,0,0)"},
+                    'steps': [
+                        {'range': [0, threshold * 100], 'color': "lightgreen"},
+                        {'range': [threshold * 100, 100], 'color': "salmon"}
+                    ],
+                    'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': proba * 100}
                 }
-            }
-        ))
-        fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+            ))
+            fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
 
-    with res_col2:
-        st.subheader("Top Fraud Indicators (PCA)")
-        st.write("Which anonymized components drove this decision?")
-        
-        # Extract feature importances
+        with res_col2:
+            st.subheader("Transaction Breakdown")
+            st.metric(label="Transaction Amount", value=f"${amount:,.2f}")
+            st.metric(label="Model Confidence", value=f"{max(proba, 1-proba)*100:.2f}%")
+            
+            if proba >= threshold:
+                st.warning("⚠️ **Action Required:** Freeze card and contact customer.")
+            else:
+                st.info("ℹ️ Transaction approved and processed normally.")
+
+
+# --- TAB 2: INSIGHTS ---
+with tab2:
+    st.subheader("Model Insights & Feature Importance")
+    st.write("Because the dataset is highly imbalanced (99.8% legitimate, 0.2% fraud), the model relies heavily on specific PCA components to catch anomalies.")
+    
+    col_chart, col_text = st.columns([1, 1])
+    
+    with col_chart:
         try:
             importances = model.feature_importances_
-            # The model trained on 30 columns
             feature_names = ['scaled_amount', 'scaled_time'] + [f'V{i}' for i in range(1, 29)]
             
             fi_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
@@ -155,7 +191,21 @@ if submit_button:
                 color='Importance', color_continuous_scale='Reds',
                 title="Top 10 Most Important Features"
             )
-            fig_fi.update_layout(showlegend=False, height=350, margin=dict(l=20, r=20, t=40, b=20))
+            fig_fi.update_layout(showlegend=False, height=400)
             st.plotly_chart(fig_fi, use_container_width=True)
         except Exception as e:
-            st.error(f"Could not load feature importance chart: {e}")
+            st.error(f"Could not load chart: {e}")
+            
+    with col_text:
+        st.markdown("### Understanding the Data")
+        st.write("""
+        * **V1 - V28:** These are the result of a **PCA (Principal Component Analysis)** transformation. 
+        * To protect user privacy, the original features (like location, merchant type, etc.) were anonymized by the bank.
+        * **V3, V4, V11, V12, and V14** are typically the strongest indicators of fraudulent behavior in this specific dataset.
+        * **Amount & Time:** These were scaled using a StandardScaler to match the PCA components.
+        
+        ### Model Performance
+        * **XGBoost** was chosen for its ability to handle highly imbalanced data.
+        * **SMOTE** (Synthetic Minority Over-sampling Technique) was applied during training to generate synthetic fraud examples, allowing the model to learn the patterns of rare events.
+        * **Threshold Tuning:** Instead of a default 0.5 threshold, the threshold was optimized to **{:.2f}** to balance Precision and Recall.
+        """.format(threshold))
