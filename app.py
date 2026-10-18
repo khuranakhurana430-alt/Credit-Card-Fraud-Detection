@@ -115,17 +115,24 @@ with tab1:
 
     if submit_button:
         # Prepare Data
+        # 1. Create a dictionary of all features
         input_data = {'scaled_amount': amount, 'scaled_time': time}
-        input_data.update({f'V{i}': 0.0 for i in range(6, 29)}) # Fill V6-V28 with 0
         input_data.update({'V1': v1, 'V2': v2, 'V3': v3, 'V4': v4, 'V5': v5})
+        for i in range(6, 29):
+            input_data[f'V{i}'] = 0.0
         
+        # 2. Create DataFrame
         input_df = pd.DataFrame([input_data])
         
-        # Scale
+        # 3. 🚨 THE FIX: Explicitly enforce the exact column order from training! 🚨
+        expected_cols = ['scaled_amount', 'scaled_time'] + [f'V{i}' for i in range(1, 29)]
+        input_df = input_df[expected_cols]
+        
+        # 4. Scale the amount and time
         input_df['scaled_amount'] = scaler.transform(input_df['scaled_amount'].values.reshape(-1, 1))
         input_df['scaled_time'] = scaler.transform(input_df['scaled_time'].values.reshape(-1, 1))
 
-        # Predict
+        # 5. Predict
         proba = model.predict_proba(input_df)[0, 1]
         prediction = "FRAUD DETECTED" if proba >= threshold else "LEGITIMATE"
 
